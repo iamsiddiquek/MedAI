@@ -1,0 +1,23 @@
+spring:
+  datasource:
+    url: jdbc:tc:postgresql:18.6:///afia_core
+    hikari:
+      maximum-pool-size: 4
+      minimum-idle: 0
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:0/not-used-in-tests
+
+afia:
+  events:
+    kafka:
+      enabled: false
+  outbox:
+    relay:
+      enabled: false
+  storage:
+    max-audio-bytes: 1024
+    s3:
+      enabled: false

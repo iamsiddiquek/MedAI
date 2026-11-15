@@ -1,0 +1,43 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: afia-api-gateway
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AFIA_OIDC_ISSUER:http://localhost:8180/realms/afia}
+          jwk-set-uri: ${AFIA_OIDC_JWKS_URI:http://localhost:8180/realms/afia/protocol/openid-connect/certs}
+  cloud:
+    gateway:
+      # Spring Cloud 2025.x reads gateway settings from spring.cloud.gateway.server.webflux.*
+      server:
+        webflux:
+          httpclient:
+            connect-timeout: 2000
+            response-timeout: 30s
+          default-filters:
+            - RemoveResponseHeader=Server
+          routes:
+            # Only the clinician/admin API is reachable from the edge. Core's /internal/**
+            # service API has no route here on purpose.
+            - id: core-api
+              uri: ${AFIA_CORE_URL:http://localhost:8081}
+              predicates:
+                - Path=/api/**
+
+afia:
+  cors:
+    allowed-origins: ${AFIA_CORS_ORIGINS:http://localhost:5173}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true

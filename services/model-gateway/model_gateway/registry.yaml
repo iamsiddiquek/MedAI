@@ -1,0 +1,58 @@
+# Model, prompt and route registry. Versioned in git: a change here is a reviewed release,
+# exactly like code. Tenant policy defaults are seeded from the `tenants` block.
+policy_version: "2026-11-15.1"
+
+models:
+  - id: stub-asr-v1
+    provider: stub-asr
+    kind: asr
+    version: "1.0.0"
+    region: local
+    status: approved
+    use_cases: [ambient_transcription]
+  - id: stub-asr-fallback-v1
+    provider: stub-asr
+    kind: asr
+    version: "1.0.0"
+    region: local
+    status: approved
+    use_cases: [ambient_transcription]
+  - id: stub-llm-v1
+    provider: stub-llm
+    kind: llm
+    version: "1.0.0"
+    region: local
+    status: approved
+    use_cases: [clinical_note_draft]
+  - id: stub-llm-fallback-v1
+    provider: stub-llm
+    kind: llm
+    version: "1.0.0"
+    region: local
+    status: approved
+    use_cases: [clinical_note_draft]
+
+prompts:
+  - id: soap-note-draft
+    version: 1
+    purpose: clinical_note_draft
+    status: approved
+    approved_models: [stub-llm-v1, stub-llm-fallback-v1]
+    template: |
+      Draft a SOAP note from the transcript segments. Every statement must cite the
+      segment numbers it is based on. Do not add facts that are not in the transcript.
+
+routes:
+  ambient_transcription:
+    primary: stub-asr-v1
+    fallbacks: [stub-asr-fallback-v1]
+  clinical_note_draft:
+    primary: stub-llm-v1
+    fallbacks: [stub-llm-fallback-v1]
+    prompt: soap-note-draft
+
+tenants:
+  default:
+    ai_enabled: true
+    allowed_regions: [local, me-central-1]
+    disabled_use_cases: []

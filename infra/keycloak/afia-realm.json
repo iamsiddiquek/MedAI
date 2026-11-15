@@ -1,0 +1,179 @@
+{
+  "realm": "afia",
+  "enabled": true,
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "sslRequired": "external",
+  "accessTokenLifespan": 300,
+  "bruteForceProtected": true,
+  "roles": {
+    "realm": [
+      {
+        "name": "clinician",
+        "description": "Records, reviews and signs notes for own encounters"
+      },
+      {
+        "name": "nurse",
+        "description": "Tenant-approved clinical workflow steps"
+      },
+      {
+        "name": "tenant-admin",
+        "description": "Manages the tenant's users, policy and settings"
+      },
+      {
+        "name": "compliance-officer",
+        "description": "Reviews consent, access and retention evidence"
+      },
+      {
+        "name": "security-auditor",
+        "description": "Read-only access to audit evidence"
+      },
+      {
+        "name": "platform-operator",
+        "description": "Operates the platform and the AI kill switch"
+      },
+      {
+        "name": "svc-ambient",
+        "description": "Service role of ambient-ai for core's internal API and model-gateway"
+      }
+    ]
+  },
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\": [{\"name\": \"username\", \"displayName\": \"${username}\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false, \"validations\": {\"length\": {\"min\": 3, \"max\": 255}}}, {\"name\": \"email\", \"displayName\": \"${email}\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false, \"validations\": {\"email\": {}, \"length\": {\"max\": 255}}}, {\"name\": \"firstName\", \"displayName\": \"${firstName}\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false, \"validations\": {\"length\": {\"max\": 255}}}, {\"name\": \"lastName\", \"displayName\": \"${lastName}\", \"permissions\": {\"view\": [\"admin\", \"user\"], \"edit\": [\"admin\", \"user\"]}, \"multivalued\": false, \"validations\": {\"length\": {\"max\": 255}}}, {\"name\": \"tenant_id\", \"displayName\": \"Tenant\", \"permissions\": {\"view\": [\"admin\"], \"edit\": [\"admin\"]}, \"multivalued\": false}]}"
+          ]
+        }
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "afia-web",
+      "name": "Afia clinician web app",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "implicitFlowEnabled": false,
+      "redirectUris": [
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": [
+        "http://localhost:5173"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:5173/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "tenant_id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenant_id",
+            "claim.name": "tenant_id",
+            "jsonType.label": "String",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "svc-ambient-ai",
+      "name": "ambient-ai service account",
+      "enabled": true,
+      "publicClient": false,
+      "secret": "${AFIA_AMBIENT_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ],
+  "users": [
+    {
+      "username": "service-account-svc-ambient-ai",
+      "enabled": true,
+      "serviceAccountClientId": "svc-ambient-ai",
+      "realmRoles": [
+        "svc-ambient"
+      ]
+    },
+    {
+      "username": "dr.sara",
+      "email": "dr.sara@demo.afia.invalid",
+      "firstName": "Sara",
+      "lastName": "Al Mansoori",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": {
+        "tenant_id": [
+          "demo-clinic"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${AFIA_DEV_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "clinician"
+      ]
+    },
+    {
+      "username": "dr.omar",
+      "email": "dr.omar@demo.afia.invalid",
+      "firstName": "Omar",
+      "lastName": "Haddad",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": {
+        "tenant_id": [
+          "second-clinic"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${AFIA_DEV_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "clinician"
+      ]
+    },
+    {
+      "username": "auditor.demo",
+      "email": "auditor.demo@demo.afia.invalid",
+      "firstName": "Layla",
+      "lastName": "Auditor",
+      "enabled": true,
+      "emailVerified": true,
+      "attributes": {
+        "tenant_id": [
+          "demo-clinic"
+        ]
+      },
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${AFIA_DEV_USER_PASSWORD}",
+          "temporary": false
+        }
+      ],
+      "realmRoles": [
+        "security-auditor"
+      ]
+    }
+  ]
+}

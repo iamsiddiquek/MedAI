@@ -1,0 +1,219 @@
+# Afia Ambient local stack. Synthetic or consented test data only.
+#
+#   infra/scripts/init-env.sh                 # once: creates .env with random secrets
+#   docker compose up -d                      # infrastructure + local models
+#   docker compose --profile app up -d --build  # ... plus the five Afia deployables
+#
+# Networks enforce the model boundary:
+#   app          - Afia services and their infrastructure
+#   models       - internal only: the router and the model servers. Of the Afia services,
+#                  only model-gateway is attached, so nothing else can reach a model.
+#   model-egress - lets the model servers download weights on first start; nothing else is on it.
+
+name: afia
+
+x-oidc: &oidc
+  AFIA_OIDC_ISSUER: http://localhost:8180/realms/afia
+  AFIA_OIDC_JWKS_URI: http://keycloak:8180/realms/afia/protocol/openid-connect/certs
+
+services:
+  # ------------------------------------------------------------ infrastructure
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_DB: afia_core
+      POSTGRES_USER: afia_core
+      POSTGRES_PASSWORD: ${AFIA_DB_PASSWORD:?run infra/scripts/init-env.sh}
+      KEYCLOAK_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?run infra/scripts/init-env.sh}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./infra/postgres-init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    ports: ["127.0.0.1:5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U afia_core -d afia_core"]
+      interval: 5s
+      retries: 20
+    networks: [app]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    command: ["start-dev", "--import-realm", "--http-port=8180"]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?run infra/scripts/init-env.sh}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD}
+      # One issuer for browser and services; services fetch keys over the internal name.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Placeholders used inside infra/keycloak/afia-realm.json
+      AFIA_AMBIENT_CLIENT_SECRET: ${AFIA_AMBIENT_CLIENT_SECRET:?run infra/scripts/init-env.sh}
+      AFIA_DEV_USER_PASSWORD: ${AFIA_DEV_USER_PASSWORD:?run infra/scripts/init-env.sh}
+    volumes:
+      - ./infra/keycloak/afia-realm.json:/opt/keycloak/data/import/afia-realm.json:ro
+    ports: ["127.0.0.1:8180:8180"]
+    depends_on:
+      postgres: {condition: service_healthy}
+    networks: [app]
+
+  kafka:
+    image: apache/kafka:4.1.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes: [kafka-data:/var/lib/kafka/data]
+    ports: ["127.0.0.1:29092:29092"]
+    networks: [app]
+
+  minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${AFIA_S3_ACCESS_KEY:?run infra/scripts/init-env.sh}
+      MINIO_ROOT_PASSWORD: ${AFIA_S3_SECRET_KEY:?run infra/scripts/init-env.sh}
+    volumes: [minio-data:/data]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    networks: [app]
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-08-13T08-35-41Z
+    depends_on: [minio]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        until mc alias set afia http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 2; done
+        mc mb --ignore-existing afia/afia-media
+    environment:
+      MINIO_ROOT_USER: ${AFIA_S3_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${AFIA_S3_SECRET_KEY}
+    networks: [app]
+
+  # ------------------------------------------------------------- local models
+  whisper:
+    image: ghcr.io/speaches-ai/speaches:latest-cpu
+    environment:
+      PRELOAD_MODELS: '["${AFIA_WHISPER_MODEL:-Systran/faster-whisper-large-v3}"]'
+    volumes: [whisper-models:/home/ubuntu/.cache/huggingface/hub]
+    networks: [models, model-egress]
+
+  ollama:
+    image: ollama/ollama:latest
+    volumes: [ollama-models:/root/.ollama]
+    networks: [models, model-egress]
+
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on: [ollama]
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["until ollama list >/dev/null 2>&1; do sleep 2; done; ollama pull ${AFIA_OLLAMA_MODEL:-qwen2.5:7b}"]
+    networks: [models]
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?run infra/scripts/init-env.sh}
+      AFIA_WHISPER_ROUTE: openai/${AFIA_WHISPER_MODEL:-Systran/faster-whisper-large-v3}
+      AFIA_OLLAMA_ROUTE: ollama_chat/${AFIA_OLLAMA_MODEL:-qwen2.5:7b}
+    volumes:
+      - ./infra/litellm/config.yaml:/app/config.yaml:ro
+    depends_on: [whisper, ollama]
+    networks: [models]
+
+  # ------------------------------------------------------- Afia deployables
+  core:
+    profiles: [app]
+    build: {context: ., dockerfile: infra/docker/java.Dockerfile, args: {MODULE: core}}
+    environment:
+      <<: *oidc
+      AFIA_DB_URL: jdbc:postgresql://postgres:5432/afia_core
+      AFIA_DB_USER: afia_core
+      AFIA_DB_PASSWORD: ${AFIA_DB_PASSWORD}
+      AFIA_KAFKA_BOOTSTRAP: kafka:9092
+      AFIA_S3_ENDPOINT: http://minio:9000
+      AFIA_S3_ACCESS_KEY: ${AFIA_S3_ACCESS_KEY}
+      AFIA_S3_SECRET_KEY: ${AFIA_S3_SECRET_KEY}
+    depends_on:
+      postgres: {condition: service_healthy}
+      kafka: {condition: service_started}
+      keycloak: {condition: service_started}
+      minio-init: {condition: service_completed_successfully}
+    networks: [app]
+
+  api-gateway:
+    profiles: [app]
+    build: {context: ., dockerfile: infra/docker/java.Dockerfile, args: {MODULE: api-gateway}}
+    environment:
+      <<: *oidc
+      AFIA_CORE_URL: http://core:8081
+      AFIA_CORS_ORIGINS: http://localhost:5173
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on: [core]
+    networks: [app]
+
+  model-gateway:
+    profiles: [app]
+    build:
+      context: services/model-gateway
+      dockerfile: ../../infra/docker/python.Dockerfile
+      args: {APP: "model_gateway.server:app"}
+    environment:
+      AFIA_OIDC_ISSUER: http://localhost:8180/realms/afia
+      AFIA_OIDC_JWKS_URL: http://keycloak:8180/realms/afia/protocol/openid-connect/certs
+      AFIA_REGISTRY_PATH: /usr/local/lib/python3.13/site-packages/model_gateway/registry.local.yaml
+      AFIA_ROUTER_URL: http://litellm:4000
+      AFIA_ROUTER_API_KEY: ${LITELLM_MASTER_KEY}
+    depends_on: [keycloak, litellm]
+    networks: [app, models]
+
+  ambient-ai:
+    profiles: [app]
+    build:
+      context: services/ambient-ai
+      dockerfile: ../../infra/docker/python.Dockerfile
+      args: {APP: "ambient_ai.worker:app"}
+    environment:
+      AFIA_OIDC_TOKEN_URL: http://keycloak:8180/realms/afia/protocol/openid-connect/token
+      AFIA_CLIENT_ID: svc-ambient-ai
+      AFIA_CLIENT_SECRET: ${AFIA_AMBIENT_CLIENT_SECRET}
+      AFIA_MODEL_GATEWAY_URL: http://model-gateway:8000
+      AFIA_CORE_URL: http://core:8081
+      AFIA_KAFKA_BOOTSTRAP: kafka:9092
+      AFIA_S3_ENDPOINT: http://minio:9000
+      AFIA_S3_ACCESS_KEY: ${AFIA_S3_ACCESS_KEY}
+      AFIA_S3_SECRET_KEY: ${AFIA_S3_SECRET_KEY}
+    depends_on: [kafka, core, model-gateway]
+    networks: [app]
+
+  web:
+    profiles: [app]
+    build: {context: web}
+    ports: ["127.0.0.1:5173:8080"]
+    depends_on: [api-gateway]
+    networks: [app]
+
+networks:
+  app: {}
+  models: {internal: true}
+  model-egress: {}
+
+volumes:
+  postgres-data: {}
+  kafka-data: {}
+  minio-data: {}
+  whisper-models: {}
+  ollama-models: {}

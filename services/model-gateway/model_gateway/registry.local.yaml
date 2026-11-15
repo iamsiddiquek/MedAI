@@ -1,0 +1,57 @@
+# Local open-source registry: Whisper for speech-to-text and an Ollama model for drafting,
+# both reached through the LiteLLM router. Nothing leaves the machine.
+#
+# There is deliberately no synthetic model in this file. If a real model is unavailable
+# the request fails and the clinician gets the manual-note path; a made-up transcript is
+# never substituted for a real recording.
+#
+# These models have NOT passed a clinical evaluation gate. Status "approved" here means
+# "approved for local development with synthetic or consented test audio only".
+policy_version: "2026-11-15.local.1"
+
+models:
+  - id: whisper-local
+    provider: router
+    upstream: whisper-local
+    kind: asr
+    version: "large-v3"
+    region: local
+    status: approved
+    use_cases: [ambient_transcription]
+  - id: llm-local
+    provider: router
+    upstream: clinical-llm-local
+    kind: llm
+    version: "ollama"
+    region: local
+    status: approved
+    use_cases: [clinical_note_draft]
+
+prompts:
+  - id: soap-note-draft
+    version: 2
+    purpose: clinical_note_draft
+    status: approved
+    approved_models: [llm-local]
+    template: |
+      You draft a SOAP clinical note for a clinician to review. You are given numbered
+      transcript segments of one consultation, in English, Arabic or both.
+      Write each statement in the language the clinician used most.
+      Use only what the transcript says. Do not add diagnoses, medicines, doses, allergies
+      or findings that were not spoken. If something was not discussed, leave it out.
+      Keep negations exactly as spoken. Questions are not findings.
+
+routes:
+  ambient_transcription:
+    primary: whisper-local
+    fallbacks: []
+  clinical_note_draft:
+    primary: llm-local
+    fallbacks: []
+    prompt: soap-note-draft
+
+tenants:
+  default:
+    ai_enabled: true
+    allowed_regions: [local]
+    disabled_use_cases: []

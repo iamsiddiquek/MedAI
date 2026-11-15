@@ -1,0 +1,13 @@
+.env
+target/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+.idea/
+.vscode/
+*.iml
+.DS_Store

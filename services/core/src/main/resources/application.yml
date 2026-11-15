@@ -1,0 +1,60 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: afia-core
+  datasource:
+    url: ${AFIA_DB_URL:jdbc:postgresql://localhost:5432/afia_core}
+    username: ${AFIA_DB_USER:afia_core}
+    password: ${AFIA_DB_PASSWORD:}
+  flyway:
+    enabled: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${AFIA_OIDC_ISSUER:http://localhost:8180/realms/afia}
+          jwk-set-uri: ${AFIA_OIDC_JWKS_URI:http://localhost:8180/realms/afia/protocol/openid-connect/certs}
+  kafka:
+    bootstrap-servers: ${AFIA_KAFKA_BOOTSTRAP:localhost:9092}
+    producer:
+      acks: all
+      properties:
+        enable.idempotence: true
+  servlet:
+    multipart:
+      enabled: false
+
+afia:
+  events:
+    topic: ${AFIA_EVENTS_TOPIC:afia.encounter.events.v1}
+    kafka:
+      enabled: true
+  outbox:
+    relay:
+      enabled: true
+      interval-ms: 1000
+  storage:
+    media-bucket: ${AFIA_MEDIA_BUCKET:afia-media}
+    max-audio-bytes: 104857600
+    s3:
+      enabled: true
+      endpoint: ${AFIA_S3_ENDPOINT:http://localhost:9000}
+      region: ${AFIA_S3_REGION:me-central-1}
+      access-key: ${AFIA_S3_ACCESS_KEY:}
+      secret-key: ${AFIA_S3_SECRET_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+logging:
+  pattern:
+    level: "%5p [corr=%X{correlationId:-}]"

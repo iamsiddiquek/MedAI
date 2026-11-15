@@ -1,0 +1,33 @@
+[project]
+name = "afia-model-gateway"
+version = "0.1.0"
+description = "Afia model-gateway: the only entry point to any ASR or LLM model"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "pyjwt[crypto]>=2.8",
+    "python-multipart>=0.0.9",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 110
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["fastapi.Depends", "fastapi.File", "fastapi.Form", "fastapi.Header"]
+
+[tool.setuptools.packages.find]
+include = ["model_gateway*"]
+
+[tool.setuptools.package-data]
+model_gateway = ["registry.yaml", "registry.local.yaml"]

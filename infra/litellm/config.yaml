@@ -1,0 +1,24 @@
+# The internal LLM router. Only model-gateway can reach it (see the "models" network in
+# compose.yaml), and only with the master key. Model names on the left are the "upstream"
+# names in the model-gateway registry.
+model_list:
+  - model_name: whisper-local
+    litellm_params:
+      model: os.environ/AFIA_WHISPER_ROUTE     # openai/<whisper model id>
+      api_base: http://whisper:8000/v1
+      api_key: not-used-by-local-server
+    model_info:
+      mode: audio_transcription
+  - model_name: clinical-llm-local
+    litellm_params:
+      model: os.environ/AFIA_OLLAMA_ROUTE      # ollama_chat/<ollama model tag>
+      api_base: http://ollama:11434
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+
+litellm_settings:
+  telemetry: false
+  drop_params: true
+  # Prompts and transcripts are clinical content: the router must not log them.
+  turn_off_message_logging: true

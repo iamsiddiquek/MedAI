@@ -1,9 +1,13 @@
 name: ci
 
+# Runs only when started by hand (Actions tab -> ci -> Run workflow) until GitHub Actions
+# billing is sorted out. To run on every push and pull request again, restore:
+#   on:
+#     pull_request:
+#     push:
+#       branches: [main]
 on:
-  pull_request:
-  push:
-    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read

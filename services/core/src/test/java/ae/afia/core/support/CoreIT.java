@@ -14,6 +14,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ActiveProfiles;
@@ -55,7 +56,9 @@ public abstract class CoreIT {
                         j.claim("tenant_id", tenant);
                     }
                 })
-                .authorities(Arrays.stream(roles).map(r -> new SimpleGrantedAuthority("ROLE_" + r)).toList());
+                .authorities(Arrays.stream(roles)
+                        .<GrantedAuthority>map(r -> new SimpleGrantedAuthority("ROLE_" + r))
+                        .toList());
     }
 
     protected static String read(ResultActions result, String path) throws Exception {

@@ -225,7 +225,7 @@ feedback capture, release approval records. No model here has passed a clinical 
 | Java services | Java 25, Spring Boot 4.1.2, Spring Cloud 2025.1.3 | `pom.xml` |
 | Data | PostgreSQL 18 (pgvector image), Flyway migrations | `compose.yaml`, `services/core/src/main/resources/db/migration` |
 | Messaging | Apache Kafka 4.1 (KRaft) | `compose.yaml` |
-| Object storage | S3 API; MinIO locally | `compose.yaml` |
+| Object storage | S3 API; Versity S3 Gateway locally (MinIO no longer publishes free images) | `compose.yaml` |
 | Identity | Keycloak 26.8 | `compose.yaml`, `infra/keycloak/afia-realm.json` |
 | Python services | Python 3.13, FastAPI, httpx, aiokafka, boto3 | `services/*/pyproject.toml` |
 | Model routing | LiteLLM router; Whisper (Speaches server); Ollama | `compose.yaml`, `infra/litellm/config.yaml` |

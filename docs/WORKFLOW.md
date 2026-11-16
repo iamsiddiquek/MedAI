@@ -11,7 +11,7 @@ approves and merges.
 | Product owner and architecture authority | Muhammad Siddique | Chooses the next slice, approves specs and ADRs, merges |
 | Worker | An AI coding agent (for example Gemini through Antigravity) or an engineer | Implements exactly one slice on a branch |
 | Reviewer | A second agent (for example Claude Code) that did not write the code | Reviews the diff against the spec and the rules below; never merges |
-| CI | GitHub Actions | The judge of "it works"; nobody overrides a red build |
+| CI | GitHub Actions (manual trigger only for now; until it is back on, the gates below are run locally and the results pasted into the pull request) | The judge of "it works"; nobody overrides a red build |
 
 ## The loop, one slice at a time
 
